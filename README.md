@@ -43,6 +43,59 @@ print(result["summary"])
 # SEV2 Database incident. Most likely cause: Database connection pool exhaustion (medium likelihood). ...
 ```
 
+## Running as an MCP server
+
+`incident_mcp/server.py` exposes every tool whose docstring lists `mcp` under `expose`:
+
+- The docstring's `description` becomes the tool description.
+- Each `args` description becomes a parameter description in the input schema.
+- The `tags` are sent in the tool's `_meta`.
+- Every tool is marked read-only, idempotent and closed-world.
+
+The server also sends the suggested workflow as server instructions, and offers an `incident_response` prompt. It works with MCP Python SDK 2.x (`MCPServer`) and 1.x (`FastMCP`).
+
+```bash
+pip install -e .
+```
+
+```bash
+incident-mcp                                            # stdio, for Claude Code / Claude Desktop
+```
+
+```bash
+incident-mcp --transport streamable-http --port 8000    # shared HTTP server at http://127.0.0.1:8000/mcp
+```
+
+Options: `--host`, `--port`, `--knowledge-dir` and `--templates-dir` (to use your own rules and templates), and `--log-level`. Logs go to stderr, so they never mix with the stdio protocol.
+
+**Claude Code:**
+
+```bash
+claude mcp add incident-resolution -- python -m incident_mcp.server
+```
+
+**Claude Desktop** (`claude_desktop_config.json`). Set `cwd` to this repository, or install the package first:
+
+```json
+{
+  "mcpServers": {
+    "incident-resolution": {
+      "command": "python",
+      "args": ["-m", "incident_mcp.server"],
+      "cwd": "/path/to/Incident-management"
+    }
+  }
+}
+```
+
+The HTTP transport has no authentication. Bind it to `127.0.0.1` (the default) or put it behind your gateway or OAuth before you share it (see `plan.md` §8–9).
+
+To try it interactively, use the MCP Inspector:
+
+```bash
+npx @modelcontextprotocol/inspector python -m incident_mcp.server
+```
+
 ## Tuning the knowledge
 
 Change behaviour by editing the files below. No code changes are needed.
@@ -70,4 +123,4 @@ pip install -e ".[test]"
 pytest -q
 ```
 
-The tests also check that every tool's docstring parses as YAML, contains no tabs, and lists the same args as the method signature.
+The tests also check that every tool's docstring parses as YAML, contains no tabs, and lists the same args as the method signature. `tests/test_server.py` checks the MCP tool schemas and runs a real client against the server over stdio.
