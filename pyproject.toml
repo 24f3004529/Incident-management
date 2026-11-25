@@ -1,0 +1,26 @@
+[project]
+name = "incident-mcp"
+version = "0.1.0"
+description = "Simple MCP tools to analyse, diagnose, remediate and escalate IT incidents"
+requires-python = ">=3.10"
+dependencies = [
+    "loguru>=0.7",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["incident_mcp"]
+
+[tool.setuptools.package-data]
+incident_mcp = ["knowledge/*.yaml", "knowledge/*.json", "templates/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

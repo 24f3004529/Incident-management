@@ -1,0 +1,136 @@
+# Remediation steps per category, with optional cause-specific steps.
+#
+# Each step has:
+#   phase        - diagnose | mitigate | fix | verify  (steps are returned in this phase order:
+#                  a quick diagnosis, then mitigation to restore service, then the lasting fix, then verification)
+#   action       - what to do
+#   risk         - low | medium | high  (medium and high are marked requires_approval)
+#   verification - how to tell the step worked
+#   rollback     - how to undo the step
+#
+# "default" is used for the category. "by_cause" (key = cause name from causes.yaml) replaces the default
+# when the root cause is known. "Other" must exist.
+# These are recommendations only: the tools never change a real system.
+
+Database:
+  default:
+    - {phase: diagnose, action: "Check database metrics (connections, CPU, slow queries, locks)", risk: low, verification: Abnormal metric identified, rollback: Not applicable}
+    - {phase: mitigate, action: Restart affected pod, risk: medium, verification: Error rate drops and pods are Ready, rollback: Not applicable (stateless restart)}
+    - {phase: fix, action: "Apply the fix for the confirmed cause (query, index, pool size or capacity)", risk: medium, verification: Metric back within normal range, rollback: Revert the change}
+    - {phase: verify, action: Validate error logs, risk: low, verification: No new database errors for 15 minutes, rollback: Not applicable}
+  by_cause:
+    Database connection pool exhaustion:
+      - {phase: diagnose, action: Compare active connections with the pool maximum and find which service holds them, risk: low, verification: Owner of the connections identified, rollback: Not applicable}
+      - {phase: mitigate, action: Restart the pods holding leaked or idle connections, risk: medium, verification: Active connections drop below 80% of the maximum, rollback: Not applicable (stateless restart)}
+      - {phase: mitigate, action: Temporarily raise the pool size if the database has headroom, risk: medium, verification: No more pool timeout errors, rollback: Restore the previous pool size}
+      - {phase: fix, action: Fix connection leaks or add connection timeouts and limits in the application, risk: medium, verification: Connections stay stable under load, rollback: Revert the change}
+      - {phase: verify, action: Validate error logs, risk: low, verification: No pool or connection errors for 15 minutes, rollback: Not applicable}
+    Query deadlock or lock contention:
+      - {phase: diagnose, action: Identify the blocking session and the queries involved, risk: low, verification: Blocking query identified, rollback: Not applicable}
+      - {phase: mitigate, action: Terminate the blocking session after confirming it is safe, risk: high, verification: Waiting queries complete, rollback: Re-run the terminated job if needed}
+      - {phase: fix, action: Change the access order or add indexes to shorten lock duration, risk: medium, verification: No deadlocks in the database log for 24 hours, rollback: Revert the change}
+      - {phase: verify, action: Validate error logs, risk: low, verification: No deadlock errors for 15 minutes, rollback: Not applicable}
+
+Memory:
+  default:
+    - {phase: diagnose, action: Check memory usage, risk: low, verification: Process or pod with high memory identified, rollback: Not applicable}
+    - {phase: mitigate, action: Restart affected pod, risk: medium, verification: Memory usage back to baseline, rollback: Not applicable (stateless restart)}
+    - {phase: fix, action: Right-size memory limits or fix the code that uses the memory, risk: medium, verification: Memory stays stable over 24 hours, rollback: Restore previous limits or revert the change}
+    - {phase: verify, action: Validate error logs, risk: low, verification: No OOM or memory errors for 15 minutes, rollback: Not applicable}
+  by_cause:
+    Memory leak:
+      - {phase: diagnose, action: Capture a heap dump or memory profile before restarting, risk: low, verification: Dump saved for analysis, rollback: Not applicable}
+      - {phase: mitigate, action: Rolling restart of the affected pods, risk: medium, verification: Memory usage back to baseline, rollback: Not applicable (stateless restart)}
+      - {phase: mitigate, action: Schedule periodic restarts until the leak is fixed, risk: low, verification: No OOM kills, rollback: Remove the schedule}
+      - {phase: fix, action: Find and fix the leak using the heap dump, risk: medium, verification: Memory flat over 24 hours under normal load, rollback: Revert the change}
+      - {phase: verify, action: Validate error logs, risk: low, verification: No OOM or memory errors for 15 minutes, rollback: Not applicable}
+
+Performance:
+  default:
+    - {phase: diagnose, action: Check CPU metrics, risk: low, verification: Bottleneck resource identified, rollback: Not applicable}
+    - {phase: mitigate, action: Scale up the service, risk: medium, verification: Latency and CPU back within SLO, rollback: Scale back to the previous size}
+    - {phase: fix, action: "Optimise the slow code path or query, or adjust capacity planning", risk: medium, verification: Latency within SLO at peak load, rollback: Revert the change}
+    - {phase: verify, action: Validate error logs, risk: low, verification: No timeout or slowness errors for 15 minutes, rollback: Not applicable}
+  by_cause:
+    High CPU usage:
+      - {phase: diagnose, action: "Find the process or endpoint using the CPU (top, profiler, traces)", risk: low, verification: Hot code path identified, rollback: Not applicable}
+      - {phase: mitigate, action: Scale up the service (more replicas or larger instances), risk: medium, verification: CPU below 70% and latency within SLO, rollback: Scale back to the previous size}
+      - {phase: fix, action: Optimise the hot code path or move heavy work to a background job, risk: medium, verification: CPU per request reduced, rollback: Revert the change}
+      - {phase: verify, action: Validate error logs, risk: low, verification: No timeout errors for 15 minutes, rollback: Not applicable}
+
+Network:
+  default:
+    - {phase: diagnose, action: Check network connectivity, risk: low, verification: Failing hop or host identified, rollback: Not applicable}
+    - {phase: mitigate, action: Restart affected pod, risk: medium, verification: Connections succeed again, rollback: Not applicable (stateless restart)}
+    - {phase: mitigate, action: Fail over to a healthy zone or region if available, risk: high, verification: Traffic served from the healthy location, rollback: Fail back once the original location is healthy}
+    - {phase: fix, action: "Correct the network, DNS or load balancer configuration", risk: medium, verification: No timeouts between components, rollback: Revert the configuration}
+    - {phase: verify, action: Validate error logs, risk: low, verification: No network errors for 15 minutes, rollback: Not applicable}
+  by_cause:
+    DNS resolution failure:
+      - {phase: diagnose, action: Resolve the failing hostname from the affected host with dig or nslookup, risk: low, verification: Failing record or resolver identified, rollback: Not applicable}
+      - {phase: mitigate, action: "Correct or restore the DNS record, or switch to a working resolver", risk: medium, verification: Name resolves on all affected hosts, rollback: Restore the previous record or resolver}
+      - {phase: fix, action: Add DNS monitoring and review TTLs and change control for DNS, risk: low, verification: Alert fires in a test, rollback: Not applicable}
+      - {phase: verify, action: Validate error logs, risk: low, verification: No resolution errors for 15 minutes, rollback: Not applicable}
+
+Disk:
+  default:
+    - {phase: diagnose, action: Check disk usage with df -h and df -i, risk: low, verification: Full volume identified, rollback: Not applicable}
+    - {phase: mitigate, action: "Free space by removing old logs, temp files or rotated archives", risk: medium, verification: Usage below 80%, rollback: Restore deleted files from backup if needed}
+    - {phase: mitigate, action: Expand the volume if cleanup is not enough, risk: medium, verification: Usage below 80%, rollback: Not applicable}
+    - {phase: fix, action: "Add log rotation, retention limits and a disk usage alert", risk: low, verification: Usage stays stable, rollback: Revert the configuration}
+    - {phase: verify, action: Validate error logs, risk: low, verification: No disk errors for 15 minutes, rollback: Not applicable}
+
+Application:
+  default:
+    - {phase: diagnose, action: Group the errors by stack trace and find the failing code path, risk: low, verification: Failing code path identified, rollback: Not applicable}
+    - {phase: mitigate, action: Roll back to the last known good version if the error started after a deploy, risk: medium, verification: Error rate back to baseline, rollback: Redeploy the newer version}
+    - {phase: mitigate, action: Restart affected pod, risk: medium, verification: Error rate drops, rollback: Not applicable (stateless restart)}
+    - {phase: fix, action: "Fix the defect, add a test and redeploy", risk: medium, verification: Error does not recur after the deploy, rollback: Roll back the fix}
+    - {phase: verify, action: Validate error logs, risk: low, verification: No new exceptions for 15 minutes, rollback: Not applicable}
+
+Deployment:
+  default:
+    - {phase: diagnose, action: Confirm the problem started after the latest deploy or configuration change, risk: low, verification: Change and start time line up, rollback: Not applicable}
+    - {phase: mitigate, action: Roll back the deployment or configuration change, risk: medium, verification: Error rate back to baseline, rollback: Redeploy the change}
+    - {phase: fix, action: "Fix the change, test it in staging and redeploy", risk: medium, verification: Healthy after the new deploy, rollback: Roll back again}
+    - {phase: verify, action: Validate error logs, risk: low, verification: No new errors for 15 minutes, rollback: Not applicable}
+  by_cause:
+    Configuration change:
+      - {phase: diagnose, action: Diff the current configuration and feature flags against the last known good state, risk: low, verification: Changed setting identified, rollback: Not applicable}
+      - {phase: mitigate, action: Revert the setting or turn off the feature flag, risk: medium, verification: Error rate back to baseline, rollback: Re-apply the setting}
+      - {phase: fix, action: Correct the configuration and add validation for it, risk: medium, verification: Healthy after re-applying, rollback: Revert the setting}
+      - {phase: verify, action: Validate error logs, risk: low, verification: No new errors for 15 minutes, rollback: Not applicable}
+
+Security:
+  default:
+    - {phase: diagnose, action: Engage Security Operations and preserve logs and evidence, risk: low, verification: Security on-call acknowledged, rollback: Not applicable}
+    - {phase: mitigate, action: Contain the threat by blocking malicious sources or isolating affected hosts, risk: high, verification: Malicious activity stops, rollback: Remove the block or isolation}
+    - {phase: mitigate, action: Rotate exposed credentials and keys, risk: high, verification: Old credentials no longer work, rollback: Not applicable}
+    - {phase: fix, action: Patch the vulnerability or misconfiguration that allowed the event, risk: medium, verification: Scan shows the issue is fixed, rollback: Revert the patch}
+    - {phase: verify, action: Monitor for repeat activity, risk: low, verification: No suspicious activity for 24 hours, rollback: Not applicable}
+
+Dependency:
+  default:
+    - {phase: diagnose, action: Check the provider status page and the error rate of calls to the provider, risk: low, verification: Provider problem confirmed or ruled out, rollback: Not applicable}
+    - {phase: mitigate, action: "Enable the fallback, cache or circuit breaker for the dependency", risk: medium, verification: Users served in degraded mode without errors, rollback: Disable the fallback}
+    - {phase: mitigate, action: Open a ticket with the vendor and share request IDs and timestamps, risk: low, verification: Vendor acknowledged, rollback: Not applicable}
+    - {phase: fix, action: "Add retries with backoff, timeouts and a fallback for this dependency", risk: medium, verification: Provider errors no longer cause user-facing failures, rollback: Revert the change}
+    - {phase: verify, action: Validate error logs, risk: low, verification: No dependency errors for 15 minutes, rollback: Not applicable}
+
+Auth:
+  default:
+    - {phase: diagnose, action: "Find which credential, certificate or permission is failing", risk: low, verification: Failing identity or certificate identified, rollback: Not applicable}
+    - {phase: mitigate, action: Renew or rotate the certificate or credential, risk: medium, verification: Authentication succeeds again, rollback: Restore the previous credential if still valid}
+    - {phase: fix, action: Automate renewal and add an expiry alert, risk: low, verification: Alert fires in a test, rollback: Not applicable}
+    - {phase: verify, action: Validate error logs, risk: low, verification: No authentication errors for 15 minutes, rollback: Not applicable}
+  by_cause:
+    Expired TLS or SSL certificate:
+      - {phase: diagnose, action: Check the certificate expiry date with openssl s_client, risk: low, verification: Expired certificate identified, rollback: Not applicable}
+      - {phase: mitigate, action: "Renew and install the certificate, then reload the service or load balancer", risk: medium, verification: TLS handshake succeeds and expiry date is in the future, rollback: Restore the previous certificate}
+      - {phase: fix, action: Automate certificate renewal and alert 30 days before expiry, risk: low, verification: Alert fires in a test, rollback: Not applicable}
+      - {phase: verify, action: Validate error logs, risk: low, verification: No TLS errors for 15 minutes, rollback: Not applicable}
+
+Other:
+  default:
+    - {phase: diagnose, action: "Gather logs, metrics and recent changes for the affected service", risk: low, verification: Evidence collected, rollback: Not applicable}
+    - {phase: mitigate, action: Escalate to the on-call engineer, risk: low, verification: On-call engineer acknowledged, rollback: Not applicable}

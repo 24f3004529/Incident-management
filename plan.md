@@ -552,6 +552,8 @@ Agent → classify_incident            → Database (0.9)
 
 ### 15.7 Build steps for the simple track
 
+> **Status:** steps 1–7 are implemented in `incident_mcp/` (see `README.md`), with tests in `tests/`. Steps 8–9 remain.
+
 | Step | Work | Done when |
 |---|---|---|
 | 1 | Fix the issues in 15.2 (tabs, typos, scored classification, word boundaries) | Existing 4 tools pass the new unit tests |

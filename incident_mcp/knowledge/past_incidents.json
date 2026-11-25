@@ -1,0 +1,101 @@
+{
+  "_note": "Sample past incidents for find_similar_incidents. Replace them with your own resolved incidents and postmortems.",
+  "incidents": [
+    {
+      "id": "INC-1001",
+      "title": "Checkout API 500 errors, too many connections",
+      "description": "Checkout API returned HTTP 500 for about 30% of requests. Database logs showed too many connections and pool timeout errors.",
+      "category": "Database",
+      "root_cause": "Database connection pool exhaustion caused by a connection leak in the order service",
+      "fix": "Restarted order-service pods, then fixed the leak by closing connections in a finally block"
+    },
+    {
+      "id": "INC-1002",
+      "title": "Orders table deadlocks during batch import",
+      "description": "Nightly import job and checkout both updating the orders table. Deadlock detected errors and slow checkout.",
+      "category": "Database",
+      "root_cause": "Query deadlock between the batch import and checkout transactions",
+      "fix": "Moved the import to off-peak hours and changed the update order to avoid lock cycles"
+    },
+    {
+      "id": "INC-1003",
+      "title": "Search service OOMKilled repeatedly",
+      "description": "Search pods restarted every few hours with OOMKilled. Memory grew steadily after each restart.",
+      "category": "Memory",
+      "root_cause": "Memory leak in the query result cache which never evicted entries",
+      "fix": "Added a size limit and eviction to the cache; scheduled restarts until the fix was deployed"
+    },
+    {
+      "id": "INC-1004",
+      "title": "API latency high, CPU saturated at 98%",
+      "description": "Public API p99 latency above 3 seconds. CPU saturated on all nodes during a marketing campaign traffic spike.",
+      "category": "Performance",
+      "root_cause": "Traffic spike beyond capacity during a marketing campaign",
+      "fix": "Scaled out the API from 6 to 15 replicas and added autoscaling rules"
+    },
+    {
+      "id": "INC-1005",
+      "title": "Payment gateway timeouts",
+      "description": "Calls to the external payment gateway timed out. Users saw payment failures at checkout.",
+      "category": "Dependency",
+      "root_cause": "Third-party payment provider outage",
+      "fix": "Switched to the backup payment provider and enabled the circuit breaker"
+    },
+    {
+      "id": "INC-1006",
+      "title": "Internal services cannot resolve database hostname",
+      "description": "Multiple services logged could not resolve host errors for the database endpoint after a DNS change.",
+      "category": "Network",
+      "root_cause": "DNS resolution failure after a record was deleted during a DNS cleanup",
+      "fix": "Restored the DNS record and added DNS change review"
+    },
+    {
+      "id": "INC-1007",
+      "title": "Log volume full on app servers",
+      "description": "Application servers stopped writing data with no space left on device errors. Disk usage at 100%.",
+      "category": "Disk",
+      "root_cause": "Disk full because debug logging was left on and log rotation was missing",
+      "fix": "Removed old logs, turned off debug logging and configured logrotate"
+    },
+    {
+      "id": "INC-1008",
+      "title": "NullPointerException after release 2.31",
+      "description": "Checkout started throwing NullPointerException in PriceCalculator right after deploying version 2.31.",
+      "category": "Application",
+      "root_cause": "Regression in a recent code change in the pricing module",
+      "fix": "Rolled back to version 2.30, fixed the null check and added a unit test"
+    },
+    {
+      "id": "INC-1009",
+      "title": "Feature flag enabled new recommendation engine for all users",
+      "description": "Error rate jumped after a feature flag was turned on for 100% of users instead of 5%.",
+      "category": "Deployment",
+      "root_cause": "Configuration change to a feature flag rollout percentage",
+      "fix": "Turned the flag back to 5% and added a review step for flag changes"
+    },
+    {
+      "id": "INC-1010",
+      "title": "TLS handshake failures on partner API",
+      "description": "Partners reported SSL errors and certificate expired messages when calling our API.",
+      "category": "Auth",
+      "root_cause": "Expired TLS certificate on the partner API load balancer",
+      "fix": "Renewed and installed the certificate; enabled auto-renewal and expiry alerts"
+    },
+    {
+      "id": "INC-1011",
+      "title": "Login traffic flood from many IPs",
+      "description": "Login endpoint received a flood of requests from thousands of IPs. Suspicious traffic and brute force attempts.",
+      "category": "Security",
+      "root_cause": "Credential stuffing attack against the login endpoint",
+      "fix": "Enabled WAF rate limiting and bot protection; forced password resets for affected accounts"
+    },
+    {
+      "id": "INC-1012",
+      "title": "Email notifications failing with 429",
+      "description": "Notification service received 429 Too Many Requests from the email provider and emails were delayed.",
+      "category": "Dependency",
+      "root_cause": "Rate limiting by an external API after a bulk send",
+      "fix": "Added a send queue with rate limiting and asked the provider for a higher quota"
+    }
+  ]
+}

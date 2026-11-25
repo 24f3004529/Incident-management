@@ -1,0 +1,139 @@
+# Known root causes per category.
+#
+# For each cause:
+#   cause            - the root cause name returned to the agent
+#   indicators       - words or phrases that support this cause when found in the incident text or logs
+#                      (whole-word match, case-insensitive)
+#   check_to_confirm - what an engineer can check to confirm or rule out the cause
+#
+# find_root_cause ranks the causes by how many indicators match:
+#   2 or more = high, 1 = medium, 0 = low.
+# The order in this file is the tie-breaker, so put the most common cause first.
+# "Other" must exist; it is used when nothing matches.
+
+Database:
+  - cause: Database connection pool exhaustion
+    indicators: [connection pool, pool exhausted, too many connections, max connections, timeout acquiring, pool, connection refused]
+    check_to_confirm: Compare active connections with the pool maximum in database and application metrics.
+  - cause: Query deadlock or lock contention
+    indicators: [deadlock, lock wait, lock timeout, blocked, locked, lock]
+    check_to_confirm: Check the database deadlock log or lock views such as pg_locks.
+  - cause: Slow or inefficient query
+    indicators: [slow query, full table scan, missing index, response time, execution plan, slow]
+    check_to_confirm: Review the slow-query log and the execution plans of the top queries.
+  - cause: Replication lag or failover
+    indicators: [replication, replica, lag, failover, primary, standby]
+    check_to_confirm: Check replication lag and recent failover events.
+
+Memory:
+  - cause: Memory leak
+    indicators: [leak, memory leak, steadily, growing, gradually, over time, oomkilled]
+    check_to_confirm: Plot memory usage since the last restart. A steady climb without drops points to a leak.
+  - cause: Memory pressure or undersized memory limits
+    indicators: [out of memory, oom, memory limit, swap, pressure, spike]
+    check_to_confirm: Compare peak memory usage with the container or host memory limit.
+  - cause: Excessive garbage collection
+    indicators: [gc, garbage collection, gc pause, full gc, stop-the-world]
+    check_to_confirm: Check GC logs for long or frequent full collections.
+
+Performance:
+  - cause: High CPU usage
+    indicators: [cpu, saturated, 100%, high load, load average, throttling]
+    check_to_confirm: Check CPU usage per process or pod and look for throttling.
+  - cause: Traffic spike beyond capacity
+    indicators: [traffic, spike, surge, traffic spike, requests per second, rps, campaign]
+    check_to_confirm: Compare current request rate with the normal baseline and the capacity plan.
+  - cause: Thread or worker pool saturation
+    indicators: [thread pool, worker, queue, backlog, rejected, saturated]
+    check_to_confirm: Check active threads or workers against the pool size and the queue length.
+  - cause: Inefficient code path or query
+    indicators: [slow, response time, latency, inefficient, regression]
+    check_to_confirm: Profile the slowest endpoints or traces and compare with the previous release.
+
+Network:
+  - cause: Service timeout between components
+    indicators: [timeout, timed out, gateway timeout, "504"]
+    check_to_confirm: Find which hop in the request path times out, using traces or proxy logs.
+  - cause: Network latency or packet loss
+    indicators: [latency, network latency, packet loss, jitter]
+    check_to_confirm: Run ping, mtr or traceroute between the affected hosts and check network dashboards.
+  - cause: DNS resolution failure
+    indicators: [dns, resolve, nxdomain, name resolution, could not resolve]
+    check_to_confirm: Resolve the failing hostname from the affected host with dig or nslookup.
+  - cause: Load balancer or firewall misconfiguration
+    indicators: [load balancer, firewall, "502", bad gateway, security group, connection refused]
+    check_to_confirm: Check load balancer target health and recent firewall or security group changes.
+
+Disk:
+  - cause: Disk full
+    indicators: [disk full, no space left, enospc, 100%, capacity, full]
+    check_to_confirm: Run df -h on the affected host and find the largest directories.
+  - cause: Inode exhaustion
+    indicators: [inode, inodes]
+    check_to_confirm: Run df -i on the affected host.
+  - cause: Slow storage or high IO wait
+    indicators: [iowait, io wait, iops, slow disk, latency, volume]
+    check_to_confirm: Check IO wait, IOPS and volume latency metrics.
+
+Application:
+  - cause: Code bug or unhandled exception
+    indicators: [exception, null pointer, nullpointerexception, stack trace, unhandled, "500", internal server error, panic]
+    check_to_confirm: Group the application errors by stack trace and find the failing code path.
+  - cause: Regression in a recent code change
+    indicators: [after deploy, new version, release, regression, since]
+    check_to_confirm: Compare the error start time with the latest deploy of the service.
+  - cause: Resource leak in the application (files or sockets)
+    indicators: [too many open files, file descriptors, socket, emfile]
+    check_to_confirm: Check open file descriptors for the process with lsof or /proc.
+
+Deployment:
+  - cause: Faulty deployment or bad release
+    indicators: [deploy, deployed, deployment, release, rollout, new version, after deploy]
+    check_to_confirm: Check whether the problem started right after the latest deploy and whether it affects only new instances.
+  - cause: Configuration change
+    indicators: [config, configuration, config change, setting, environment variable, feature flag]
+    check_to_confirm: Diff the current configuration and feature flags against the last known good state.
+  - cause: Failed database or schema migration
+    indicators: [migration, schema, alter table]
+    check_to_confirm: Check migration logs and the current schema version.
+
+Security:
+  - cause: Malicious traffic or DDoS
+    indicators: [ddos, attack, flood, bot, suspicious traffic, rate]
+    check_to_confirm: Look at traffic by source IP, country and user agent at the edge or WAF.
+  - cause: Compromised credentials or account
+    indicators: [breach, compromised, unauthorized access, brute force, suspicious login, leaked]
+    check_to_confirm: Review authentication logs for unusual logins and rotate affected credentials.
+  - cause: Exploited vulnerability
+    indicators: [vulnerability, cve, exploit, injection, malware]
+    check_to_confirm: Check the affected component's version against known CVEs and review WAF logs.
+
+Dependency:
+  - cause: Third-party or upstream service outage
+    indicators: [third-party, third party, vendor, provider, upstream, external, outage, "503", service unavailable]
+    check_to_confirm: Check the provider's status page and the error rate of calls to that provider.
+  - cause: Rate limiting by an external API
+    indicators: [rate limit, "429", throttled, quota]
+    check_to_confirm: Check response codes from the provider for 429 and compare usage with the quota.
+  - cause: API contract change in a dependency
+    indicators: [contract, schema, breaking change, new version, unexpected response]
+    check_to_confirm: Compare the provider's current responses with what the client expects.
+
+Auth:
+  - cause: Expired TLS or SSL certificate
+    indicators: [expired, certificate, cert, ssl, tls, x509, handshake]
+    check_to_confirm: Check the certificate expiry date with openssl s_client or the certificate manager.
+  - cause: Expired or invalid credentials or token
+    indicators: [token, expired, "401", unauthorized, invalid credentials, password, secret, api key]
+    check_to_confirm: Check when the credential or secret was last rotated and whether it is still valid.
+  - cause: Identity provider or SSO outage
+    indicators: [sso, identity provider, idp, okta, azure ad, login, saml, oauth]
+    check_to_confirm: Check the identity provider's status page and login success rate.
+  - cause: Permission misconfiguration
+    indicators: ["403", forbidden, permission, access denied, role, iam]
+    check_to_confirm: Review recent role, policy or permission changes for the affected identity.
+
+Other:
+  - cause: Unknown cause, needs manual review
+    indicators: []
+    check_to_confirm: Gather logs, metrics and recent changes, then escalate to the on-call engineer.

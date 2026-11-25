@@ -1,0 +1,63 @@
+# Severity rules used by assess_severity.
+#
+# Start at SEV3. Then:
+#   - any sev1_keywords, or users/percent above the sev1 thresholds -> SEV1
+#   - any sev2_keywords, or users/percent above the sev2 thresholds, or revenue impact -> at least SEV2
+#   - non-production, or low_impact_keywords -> no higher than SEV3
+#   - minor_keywords and nothing else -> SEV4
+
+labels:
+  SEV1: Critical
+  SEV2: Major
+  SEV3: Minor
+  SEV4: Low
+
+sev1_keywords:
+  - outage
+  - is down
+  - are down
+  - went down
+  - completely down
+  - completely unavailable
+  - all users
+  - all customers
+  - data loss
+  - data corruption
+  - breach
+  - total failure
+
+sev2_keywords:
+  - degraded
+  - partial
+  - some users
+  - some customers
+  - many users
+  - intermittent
+  - high error rate
+  - 5xx
+  - payment failures
+  - checkout failing
+  - cannot log in
+  - unable to log in
+
+low_impact_keywords:
+  - single user
+  - one user
+  - a user
+  - one customer
+  - internal tool
+
+minor_keywords:
+  - cosmetic
+  - typo
+  - question
+  - feature request
+
+production_keywords: [production, prod, live, customer-facing, customers]
+non_production_keywords: [staging, stage, dev, development, test, testing, qa, uat, sandbox]
+
+thresholds:
+  sev1_users: 1000
+  sev2_users: 100
+  sev1_percent: 50
+  sev2_percent: 10

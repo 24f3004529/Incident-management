@@ -1,0 +1,194 @@
+# Incident categories and the keywords that point to them.
+#
+# How classification works:
+#   - Each keyword is matched as a whole word or phrase (case-insensitive, plural "s"/"es" allowed),
+#     so "cpu" does not match inside "occupy".
+#   - The weights of all matching keywords are added up per category.
+#   - The category with the highest score wins. A tie goes to the category listed first in this file.
+#   - No match at all means category "Other".
+#
+# Tune accuracy by adding keywords or changing weights here; no code change is needed.
+# "plain" is a non-technical name used in executive summaries.
+
+Database:
+  plain: a database problem
+  keywords:
+    database: 3
+    db: 2
+    sql: 2
+    query: 2
+    queries: 2
+    deadlock: 3
+    connection pool: 3
+    too many connections: 3
+    max connections: 3
+    postgres: 3
+    postgresql: 3
+    mysql: 3
+    oracle: 2
+    mongodb: 3
+    replication: 2
+    replica: 2
+    lock wait: 3
+    slow query: 3
+    transaction: 1
+    table: 1
+
+Memory:
+  plain: servers running out of memory
+  keywords:
+    memory: 3
+    oom: 3
+    oomkilled: 3
+    out of memory: 3
+    heap: 3
+    memory leak: 3
+    gc: 2
+    garbage collection: 3
+    swap: 2
+    rss: 1
+
+Performance:
+  plain: the service running slowly
+  keywords:
+    cpu: 3
+    slow: 1
+    slowness: 2
+    latency: 1
+    response time: 1
+    high load: 2
+    load average: 2
+    throttling: 2
+    throttled: 1
+    saturated: 1
+    saturation: 1
+    thread pool: 2
+    backlog: 1
+    traffic spike: 2
+
+Network:
+  plain: a network connectivity problem
+  keywords:
+    network: 3
+    timeout: 2
+    timed out: 2
+    dns: 3
+    connection refused: 2
+    connection reset: 3
+    packet loss: 3
+    unreachable: 3
+    latency: 1
+    network latency: 3
+    "502": 2
+    bad gateway: 2
+    "504": 2
+    gateway timeout: 3
+    firewall: 2
+    load balancer: 2
+    vpn: 2
+
+Disk:
+  plain: servers running out of storage
+  keywords:
+    disk: 3
+    disk full: 3
+    storage: 2
+    no space left: 3
+    enospc: 3
+    inode: 3
+    filesystem: 2
+    volume: 1
+    iops: 2
+    iowait: 2
+
+Application:
+  plain: a software defect in the application
+  keywords:
+    exception: 2
+    null pointer: 3
+    nullpointerexception: 3
+    stack trace: 2
+    stacktrace: 2
+    bug: 2
+    crash: 1
+    crashloopbackoff: 2
+    internal server error: 2
+    "500": 1
+    unhandled: 2
+    panic: 2
+    segfault: 2
+    too many open files: 3
+
+Deployment:
+  plain: a recent change or release
+  keywords:
+    deploy: 3
+    deployed: 3
+    deployment: 3
+    release: 2
+    rollout: 2
+    config change: 3
+    configuration change: 3
+    feature flag: 3
+    upgrade: 2
+    migration: 2
+    new version: 2
+    rollback: 2
+
+Security:
+  plain: a security event
+  keywords:
+    security: 2
+    breach: 3
+    ddos: 3
+    attack: 3
+    malware: 3
+    ransomware: 3
+    vulnerability: 3
+    cve: 3
+    brute force: 3
+    intrusion: 3
+    suspicious: 2
+    exploit: 3
+    phishing: 3
+
+Dependency:
+  plain: a problem with an external provider
+  keywords:
+    upstream: 2
+    downstream: 1
+    third-party: 3
+    third party: 3
+    vendor: 2
+    external api: 3
+    external service: 3
+    provider: 2
+    dependency: 2
+    payment gateway: 2
+    rate limit: 2
+    "429": 2
+    "503": 1
+    service unavailable: 1
+
+Auth:
+  plain: a login, access or certificate problem
+  keywords:
+    certificate: 3
+    cert: 3
+    ssl: 3
+    tls: 3
+    x509: 3
+    expired: 1
+    authentication: 2
+    auth: 2
+    unauthorized: 2
+    "401": 2
+    "403": 1
+    forbidden: 1
+    access denied: 2
+    permission denied: 2
+    sso: 3
+    login: 1
+    token: 1
+    oauth: 2
+    saml: 3

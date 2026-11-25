@@ -1,0 +1,140 @@
+# Runbook index.
+#
+# get_runbook looks for a runbook whose "causes" list contains the root cause first,
+# then falls back to the runbook for the category.
+# The links and owners below are placeholders: replace them with your own wiki pages and teams.
+
+runbooks:
+  - id: RB-DB-001
+    title: Database connection pool exhaustion
+    category: Database
+    causes: [Database connection pool exhaustion]
+    owner: DBA Team
+    link: https://wiki.example.com/runbooks/db-connection-pool
+    steps:
+      - Check active connections against the pool maximum.
+      - Identify the service holding the most connections.
+      - Restart pods holding idle or leaked connections.
+      - If the database has headroom, raise the pool size temporarily.
+      - Open a follow-up ticket to fix the connection leak.
+  - id: RB-DB-002
+    title: Database performance and locking
+    category: Database
+    causes: [Query deadlock or lock contention, Slow or inefficient query, Replication lag or failover]
+    owner: DBA Team
+    link: https://wiki.example.com/runbooks/db-performance
+    steps:
+      - Check slow-query log, lock views and replication lag.
+      - Identify the blocking session or the slowest queries.
+      - Terminate a blocking session only after confirming it is safe.
+      - Add missing indexes or tune the query in a follow-up change.
+  - id: RB-MEM-001
+    title: High memory usage and OOM kills
+    category: Memory
+    causes: [Memory leak, Memory pressure or undersized memory limits, Excessive garbage collection]
+    owner: Application Support
+    link: https://wiki.example.com/runbooks/memory
+    steps:
+      - Check memory usage per pod and the OOM kill count.
+      - Capture a heap dump before restarting if a leak is suspected.
+      - Do a rolling restart of the affected pods.
+      - Review memory limits and GC settings.
+  - id: RB-PERF-001
+    title: High CPU and slow responses
+    category: Performance
+    causes: [High CPU usage, Traffic spike beyond capacity, Thread or worker pool saturation, Inefficient code path or query]
+    owner: SRE Team
+    link: https://wiki.example.com/runbooks/performance
+    steps:
+      - Check CPU, request rate and latency dashboards.
+      - Compare traffic with the normal baseline.
+      - Scale out the service if CPU is above 80%.
+      - Profile the slowest endpoints.
+  - id: RB-NET-001
+    title: Network timeouts and connectivity
+    category: Network
+    causes: [Service timeout between components, Network latency or packet loss, DNS resolution failure, Load balancer or firewall misconfiguration]
+    owner: Network Operations
+    link: https://wiki.example.com/runbooks/network
+    steps:
+      - Identify the failing hop with traces or proxy logs.
+      - Check DNS resolution and load balancer target health.
+      - Review recent firewall or security group changes.
+      - Fail over to a healthy zone if one zone is affected.
+  - id: RB-DISK-001
+    title: Disk full
+    category: Disk
+    causes: [Disk full, Inode exhaustion, Slow storage or high IO wait]
+    owner: Infrastructure Team
+    link: https://wiki.example.com/runbooks/disk-full
+    steps:
+      - Run df -h and df -i on the affected host.
+      - Find the largest directories with du.
+      - Remove old logs and temp files, or expand the volume.
+      - Make sure log rotation is configured.
+  - id: RB-APP-001
+    title: Application errors after a change
+    category: Application
+    causes: [Code bug or unhandled exception, Regression in a recent code change, Resource leak in the application (files or sockets)]
+    owner: Application Support
+    link: https://wiki.example.com/runbooks/app-errors
+    steps:
+      - Group errors by stack trace.
+      - Check whether errors started after the latest deploy.
+      - Roll back if the deploy is the likely cause.
+      - Raise a bug with the stack trace and request IDs.
+  - id: RB-DEP-001
+    title: Rolling back a deployment or configuration change
+    category: Deployment
+    causes: [Faulty deployment or bad release, Configuration change, Failed database or schema migration]
+    owner: Release Engineering
+    link: https://wiki.example.com/runbooks/rollback
+    steps:
+      - Confirm the change time lines up with the incident start.
+      - Roll back the deployment or revert the configuration or feature flag.
+      - Watch error rate and latency for 15 minutes.
+      - Block further deploys of the change until it is fixed.
+  - id: RB-SEC-001
+    title: Security incident first response
+    category: Security
+    causes: [Malicious traffic or DDoS, Compromised credentials or account, Exploited vulnerability]
+    owner: Security Operations
+    link: https://wiki.example.com/runbooks/security-first-response
+    steps:
+      - Page Security Operations immediately.
+      - Preserve logs and evidence; do not wipe affected hosts.
+      - Contain the threat by blocking sources or isolating hosts, with Security approval.
+      - Rotate any exposed credentials.
+  - id: RB-DEPN-001
+    title: Third-party dependency failure
+    category: Dependency
+    causes: [Third-party or upstream service outage, Rate limiting by an external API, API contract change in a dependency]
+    owner: Integration Team
+    link: https://wiki.example.com/runbooks/third-party
+    steps:
+      - Check the provider status page.
+      - Enable the fallback, cache or circuit breaker.
+      - Open a vendor ticket with request IDs and timestamps.
+      - Post a status update for affected users.
+  - id: RB-AUTH-001
+    title: Certificate expiry
+    category: Auth
+    causes: [Expired TLS or SSL certificate]
+    owner: Identity and Access Team
+    link: https://wiki.example.com/runbooks/certificate-expiry
+    steps:
+      - Check the certificate expiry date with openssl s_client.
+      - Renew the certificate through the certificate manager.
+      - Install it and reload the service or load balancer.
+      - Add an expiry alert 30 days ahead.
+  - id: RB-AUTH-002
+    title: Authentication and access failures
+    category: Auth
+    causes: [Expired or invalid credentials or token, Identity provider or SSO outage, Permission misconfiguration]
+    owner: Identity and Access Team
+    link: https://wiki.example.com/runbooks/auth-failures
+    steps:
+      - Identify the failing identity, credential or role.
+      - Check the identity provider status.
+      - Rotate the credential or restore the permission.
+      - Review recent IAM or role changes.

@@ -1,0 +1,41 @@
+# Escalation rules.
+#
+# sla_minutes: escalate to the next tier when the incident has been open this long.
+#   open >= sla      -> L2
+#   open >= 2 x sla  -> L3
+# Categories in always_escalate_categories go to their team straight away.
+# Team names are placeholders: replace them with your own on-call teams.
+
+sla_minutes:
+  SEV1: 15
+  SEV2: 60
+  SEV3: 240
+  SEV4: 1440
+
+next_update_minutes:
+  SEV1: 30
+  SEV2: 60
+  SEV3: 240
+  SEV4: 1440
+
+notify_management: [SEV1, SEV2]
+
+always_escalate_categories: [Security]
+
+tiers:
+  L1: First responder or service desk
+  L2: Specialist team on-call
+  L3: Senior engineering and incident manager
+
+routing:
+  Database: DBA Team
+  Memory: Application Support
+  Performance: SRE Team
+  Network: Network Operations
+  Disk: Infrastructure Team
+  Application: Application Support
+  Deployment: Release Engineering
+  Security: Security Operations
+  Dependency: Integration Team
+  Auth: Identity and Access Team
+  Other: On-call Incident Manager
