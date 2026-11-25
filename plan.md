@@ -333,3 +333,235 @@ User / trigger: "SEV2 INC-1234 checkout errors spiking"
 2. Collect 10 representative past incidents with their logs, metrics, changes and final RCA to use as fixtures and evals.
 3. Build Phase 0 with mock connectors, and demo `get_incident_context` → `generate_escalation_summary` in Claude Code.
 4. Replace the mocks with real read-only adapters one source at a time, then pilot.
+
+---
+
+## 15. Simple MCP tools as Python functions (quick-start track)
+
+Sections 3–11 describe the full platform. This section is a **lightweight track** for building simple, self-contained Python tools that can be plugged into an agent straight away, following the pattern of the existing `incident.py` (`IncidentResolution` class).
+
+### 15.1 The pattern to follow (taken from `incident.py`)
+
+Every tool is a **method on one class**, and the method's docstring is its tool definition:
+
+```python
+def tool_name(self, incident: str, ...) -> dict[str, Any]:
+    """
+    description:
+        Use this tool when <the user's situation / intent>.     # first line = when to pick it
+        <What it does>.
+        How it works. <Plain explanation of the logic>.
+        It expects <inputs + example call>.
+        It returns a dict with success, <fields>. If <bad input> it returns success false and an error message.
+
+    expose:
+        - mcp
+        - fastapi
+
+    tags:
+        - incident
+        - <activity>
+
+    args:
+        incident:
+            description: Free-text description of the incident
+            required: true
+    """
+    logger.info("tool_name started")
+    try:
+        if not incident or not incident.strip():
+            return {"success": False, "error": "incident text is empty"}
+        ...
+        return {"success": True, ...}
+    except Exception as e:
+        logger.error(f"Error in tool_name: {e}")
+        return {"success": False, "error": str(e)}
+```
+
+**Conventions every tool must follow**
+
+| Rule | Why |
+|---|---|
+| Inputs are simple types (`str`, `int`, `float`, `list[str]`, `dict`) | The agent can fill them from conversation; FastAPI and MCP schemas are generated without effort |
+| The first line of `description` starts with "Use this tool when …" | This is what the agent uses to **choose** the tool |
+| The tool always returns a `dict` with `success: bool` | Gives the agent one consistent way to detect and recover from errors |
+| The tool never raises; it returns `{"success": False, "error": ...}` | One failed tool shouldn't break the agent loop |
+| The tool is deterministic and reads only; it changes no real systems | Safe to call repeatedly and easy to test |
+| Knowledge (keywords, causes, steps) lives in data, not in code branches | Ops teams can extend it without changing code (see 15.4) |
+| Each tool does one job; composite tools only call other tools | The agent can combine them freely |
+| Docstrings are indented with spaces only, no tabs | The docstring is parsed as YAML-like config, and tabs break YAML |
+
+### 15.2 Improvements to make to the current `incident.py`
+
+1. **Tabs in docstrings.** The `Use this tool when …` lines (68, 104, 139, 174) are indented with a tab. Replace the tabs with spaces, or the docstring may fail to parse or be truncated.
+2. **Typos.** "fisrt" should be "first" (lines 68 and 174), and "causes of fixes" should be "causes or fixes".
+3. **First match wins.** Classification depends on dict order. For example, `"connection timeout calling payment API"` is classified as **Database** because the keyword `connection` comes before `timeout`. Change to **scoring**: count the matching keywords per category and pick the highest, then return `matched_keywords` and a `confidence` value.
+4. **Substring matching.** `"cpu"` would match inside unrelated words. Use word-boundary regexes (`\bcpu\b`) and add synonyms (`oom`, `heap`, `latency`, `5xx`, `deadlock`, `pool`, `disk`, `certificate`, and so on).
+5. **Too few categories.** Add `Disk/Storage`, `Application/Code`, `Deployment/Config`, `Security`, `Dependency/3rd-party` and `Certificate/Auth`.
+6. **Flat outputs.** Causes have no likelihood or evidence, and steps have no risk, verification or rollback. Use richer structures (see 15.3).
+7. **Duplicated validation.** Pull the empty-input check and the `try/except` into one small decorator or helper (`_safe_tool`) to remove the four copies.
+8. **Tests.** Add `pytest` cases for each category, for the empty input, and for keywords that overlap.
+
+### 15.3 Tool catalogue for the simple track
+
+All tools are methods on `IncidentResolution` (or split into 4 small classes later). ✅ marks tools that already exist.
+
+#### A. Incident analysis
+| Tool | Inputs | Returns | Logic (simple, no external calls) |
+|---|---|---|---|
+| ✅ `classify_incident` | `incident` | `category`, `confidence`, `matched_keywords` | Scored keyword match (see 15.2 item 3) |
+| `assess_severity` | `incident`, `users_affected?`, `is_production?`, `revenue_impact?` | `severity` (SEV1–SEV4), `reasons[]` | A rule table: words like "outage", "down", "all users" and "data loss" push severity up, and "staging" or "single user" push it down |
+| `extract_incident_details` | `incident` | `services[]`, `hosts[]`, `error_codes[]`, `timestamps[]`, `metrics[]` | Regexes for HTTP codes, `ORA-`/`ERR_` codes, hostnames, IPs, ISO timestamps and "98%"-style values |
+| `analyze_logs` | `log_text` (pasted lines) | `top_errors[]` (signature, count, first_seen, last_seen), `error_rate`, `levels{}` | Normalizes lines (replaces numbers, IDs and UUIDs with placeholders), groups them by signature and counts each group |
+| `build_timeline` | `events` (list of `"timestamp - text"` strings) | sorted `timeline[]`, `duration_minutes` | Parses, sorts and computes the gaps between events |
+| `find_similar_incidents` | `incident`, `top_k=3` | `matches[]` (id, title, similarity, root_cause, fix) | Word-overlap (Jaccard) or TF-IDF similarity against a local `knowledge/past_incidents.json` |
+
+#### B. Root cause
+| Tool | Inputs | Returns | Logic |
+|---|---|---|---|
+| ✅ `find_root_cause` (upgrade) | `incident`, `log_text?` | `possible_causes[]` (cause, likelihood, evidence[], check_to_confirm) | Ranks the causes in the category by how many of each cause's indicator keywords appear in the incident text and logs |
+| `correlate_with_changes` | `incident_start` (ISO), `changes` (list of `{time, service, description}`) | `suspect_changes[]` with `score` | A change made shortly before the incident start, on the same service, scores higher |
+| `five_whys` | `incident`, `answers?` (list) | `questions[]`, `chain[]`, `suggested_root_cause` | Returns a structured "5 whys" template. The agent or a person fills it in, and the tool checks that it is complete |
+
+#### C. Remediation
+| Tool | Inputs | Returns | Logic |
+|---|---|---|---|
+| ✅ `generate_remediation` (upgrade) | `incident`, `root_cause?` | `steps[]` (order, action, risk, verification, rollback), `strategy` (mitigate or fix) | Looks up the steps by category and, if given, by the specific cause. Mitigation steps come first |
+| `get_runbook` | `category` or `root_cause` | `runbook` (title, steps, owner, link) | Lookup in `knowledge/runbooks.yaml` |
+| `verify_recovery` | `metric_name`, `before`, `after`, `threshold` | `recovered: bool`, `improvement_pct` | Simple threshold comparison |
+
+#### D. Escalation and summaries
+| Tool | Inputs | Returns | Logic |
+|---|---|---|---|
+| `determine_escalation` | `category`, `severity`, `minutes_open` | `escalate: bool`, `team`, `tier`, `reason` | An SLA matrix decides when to escalate (for example, SEV1 goes up after 15 minutes and SEV2 after 60), and a routing table maps the category to a team |
+| `create_escalation_summary` | `incident`, `actions_taken[]`, `root_cause?`, `severity?`, `ask?` | `summary` (markdown), plus the fields: headline, impact, status, actions_taken, hypothesis, ask, next_update | Fills a fixed template for engineer-to-engineer handoff |
+| ✅ `create_executive_summary` (upgrade) | `incident`, `severity?`, `duration?`, `users_affected?` | the existing fields plus `business_impact`, `status`, `next_steps` | Non-technical wording, at most 5 lines |
+| `draft_postmortem` | `incident`, `timeline[]`, `root_cause`, `actions_taken[]` | `postmortem` (markdown sections) | Template: Summary / Impact / Timeline / Root cause / Resolution / Action items |
+
+#### E. Composite (optional)
+| Tool | What it does |
+|---|---|
+| `triage_incident` | Calls `classify_incident`, `assess_severity`, `extract_incident_details`, `find_root_cause`, `generate_remediation` and `determine_escalation`, and returns one combined result. This is useful for agents that should answer in a single tool call. |
+
+### 15.4 Keep knowledge outside the code
+
+```
+incident_mcp/
+├── incident.py                 # IncidentResolution class (tools only)
+├── knowledge/
+│   ├── categories.yaml         # category -> keywords/synonyms (with weights)
+│   ├── causes.yaml             # category -> [{cause, indicators[], check_to_confirm}]
+│   ├── remediation.yaml        # category/cause -> [{action, risk, verification, rollback}]
+│   ├── runbooks.yaml           # runbook metadata + steps + links
+│   ├── escalation.yaml         # severity SLA matrix + category -> team routing
+│   └── past_incidents.json     # for find_similar_incidents
+├── templates/
+│   ├── escalation_summary.md
+│   ├── executive_summary.md
+│   └── postmortem.md
+└── tests/
+    └── test_incident.py
+```
+
+Example `causes.yaml` entry:
+```yaml
+Database:
+  - cause: Database connection pool exhaustion
+    indicators: [pool, "too many connections", "connection refused", timeout acquiring]
+    check_to_confirm: Compare active connections with the pool max in DB metrics
+  - cause: Query deadlock
+    indicators: [deadlock, "lock wait", "lock timeout"]
+    check_to_confirm: Check DB deadlock logs / pg_locks
+```
+
+Load these files once in `__init__` (with `logger.success(...)` after loading), so ops engineers can improve accuracy by editing YAML without code changes.
+
+### 15.5 Example of an upgraded tool
+
+```python
+def find_root_cause(self, incident: str, log_text: str = "") -> dict[str, Any]:
+    """
+    description:
+        Use this tool when the user asks why an incident happened or what could be causing it.
+        Return the most likely root causes of an IT incident, ranked by likelihood.
+        How it works. It classifies the incident with the scored keyword rules, then ranks
+        the known causes for that category by how many of each cause's indicator words
+        appear in the incident text and optional log lines. Each cause comes with the
+        matched evidence and a check the engineer can run to confirm it.
+        It expects an incident string and optional log_text, for example
+        find_root_cause("Checkout API returns 500, too many connections in DB logs").
+        It returns a dict with success, category and possible_causes (a list of
+        cause, likelihood, evidence, check_to_confirm). If the text is empty it returns
+        success false and an error message.
+
+    expose:
+        - mcp
+        - fastapi
+
+    tags:
+        - incident
+        - root-cause
+
+    args:
+        incident:
+            description: Free-text description of the incident
+            required: true
+        log_text:
+            description: Optional log lines or error messages related to the incident
+            required: false
+    """
+    logger.info("find_root_cause started")
+    try:
+        if not incident or not incident.strip():
+            return {"success": False, "error": "incident text is empty"}
+        text = f"{incident} {log_text}".lower()
+        category = self._classify(text)["category"]
+        ranked = []
+        for c in self.causes.get(category, self.causes["Other"]):
+            hits = [i for i in c.get("indicators", []) if i.lower() in text]
+            ranked.append({
+                "cause": c["cause"],
+                "likelihood": "high" if len(hits) >= 2 else "medium" if hits else "low",
+                "evidence": hits,
+                "check_to_confirm": c.get("check_to_confirm", ""),
+            })
+        order = {"high": 0, "medium": 1, "low": 2}
+        ranked.sort(key=lambda r: order[r["likelihood"]])
+        return {"success": True, "category": category, "possible_causes": ranked}
+    except Exception as e:
+        logger.error(f"Error in find_root_cause: {e}")
+        return {"success": False, "error": str(e)}
+```
+
+### 15.6 How the agent uses the tools
+
+Add a short system prompt (or an MCP prompt) to the agent:
+
+> You are an incident response assistant. For a new incident: (1) `classify_incident` and `assess_severity`; (2) if logs are provided, `analyze_logs`; (3) `find_root_cause` and `find_similar_incidents`; (4) `generate_remediation` / `get_runbook`; (5) `determine_escalation`; if escalation is needed, `create_escalation_summary`; for management, `create_executive_summary`. Always show evidence for root causes, never claim a cause is confirmed unless the user confirms it, and never state that a fix has been applied — tools only recommend.
+
+Typical flow:
+```
+User: "Checkout API returning 500s since 14:05, logs show 'too many connections'. Prod, ~30% of users."
+Agent → classify_incident            → Database (0.9)
+      → assess_severity              → SEV2 (prod, partial outage)
+      → find_root_cause(+logs)       → Connection pool exhaustion (high, evidence: "too many connections")
+      → generate_remediation         → 1) check pool metrics 2) raise pool / restart pod 3) verify 5xx < 1%
+      → determine_escalation         → escalate to DBA team (SEV2, 45 min open)
+      → create_escalation_summary    → markdown handoff for DBA on-call
+```
+
+### 15.7 Build steps for the simple track
+
+| Step | Work | Done when |
+|---|---|---|
+| 1 | Fix the issues in 15.2 (tabs, typos, scored classification, word boundaries) | Existing 4 tools pass the new unit tests |
+| 2 | Move the rules to `knowledge/*.yaml` and load them in `__init__` | No knowledge tables left in the Python code |
+| 3 | Add the analysis tools: `assess_severity`, `extract_incident_details`, `analyze_logs` | Tests with sample incidents and logs pass |
+| 4 | Upgrade `find_root_cause`; add `correlate_with_changes` and `find_similar_incidents` (seeded with 10–20 past incidents) | The correct cause is in the top 2 for the sample set |
+| 5 | Upgrade `generate_remediation`; add `get_runbook` and `verify_recovery` | Every step has a verification and a rollback |
+| 6 | Add `determine_escalation`, `create_escalation_summary`, upgrade `create_executive_summary`, add `draft_postmortem` | Summaries render from the templates |
+| 7 | Add the `triage_incident` composite plus the agent system prompt (15.6) | An end-to-end demo works in the agent over MCP and FastAPI |
+| 8 | Evaluate on 20–30 real past incidents; tune the YAML | Category accuracy ≥ 85%, root-cause top 2 ≥ 60% |
+| 9 | Later: replace the pasted-text inputs with live data sources (logs, metrics, ITSM) following §4 | Tools fetch data by `incident_id` instead of free text |
+
+> Moving from the simple track to the full platform: the function signatures stay the same. Later versions add optional `incident_id` or `service` inputs, and the same tools fetch live data through the connectors in §3. Agents built on the simple tools keep working.
